@@ -1,0 +1,100 @@
+﻿@page "/chatRoom"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.SignalR.Client
+@using SignalRChat.Data
+@using SignalRChat.Hubs
+@using SignalRChat.Models
+@using SignalRChat.Services
+@inject ChatService chatService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager navigationManager
+
+<h3>Chat Room</h3>
+<div class="alert alert-secondary mt-4" role="alert">
+    <span class="oi oi-person mr-2" aria-hidden="true"></span>
+    @if (_user != null)
+    {
+        <span>You are connected as <b>@_user.Identity.Name</b></span>
+    }
+    <div id="scrollbox">
+        @foreach (var item in _messages)
+        {
+            <div class="@item.CSS">
+                    <div class="user">@item.Username</div>
+                <div class="msg">@item.Body</div>
+            </div>
+        }
+        <hr />
+        <h5>Send Message To</h5>
+        <select class="form-control" @bind="@_userNameTo">
+            <option value="">Select</option>
+            @foreach (var u in _users)
+            {
+                if (_user.Identity.Name != u.UserName)
+                {
+                    <option value="@u.UserName">@u.UserName</option>
+                }
+            }
+        </select>
+        <textarea placeholder="enter your comment" @bind="@_messageInput"></textarea>
+        <button class="btn btn-primary" @onclick="SendMessage">Send</button>
+    </div>
+</div>
+@code {
+    private HubConnection hubConnection;
+    ClaimsPrincipal? _user = null;
+    List<IdentityUser> _users = new();
+    private List<MessageDto> _messages = new();
+    private string _messageInput;
+    private string _userNameTo;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _user = authState.User;
+        _users = chatService.GetUsers();
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(navigationManager.ToAbsoluteUri("/chat"))
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (name, message) =>
+        {
+            //bool isMine = name.Equals(_user.Identity.Name, StringComparison.OrdinalIgnoreCase);
+            _messages.Add(new MessageDto(name, message, false));
+            StateHasChanged();
+
+
+        });
+        await hubConnection.StartAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        //var messagesFromDatabase = chatService.List(roomInput.ToLowerInvariant());
+
+        //foreach(var msg in messagesFromDatabase)
+        //{
+        //    messages.Add(new ChatMessageDTO()
+        //    {
+        //        Username = msg.Username,
+        //        DateSent = msg.DateSent,
+        //        CurrentUser = msg.Username == usernameInput,
+        //        Message = msg.Message.FillEmojiInText()
+        //    });
+        //}
+       await hubConnection.SendAsync("JoinToRoom", _user.Identity.Name);
+
+    }
+
+    private async Task SendMessage()
+    {
+        await hubConnection.SendAsync("SendMessage", _user.Identity.Name,_userNameTo,_messageInput);
+        _messages.Add(new MessageDto(_user.Identity.Name, _messageInput, true));
+        _messageInput = String.Empty;
+    }
+
+}
