@@ -2,11 +2,12 @@
 {
     public class MessageDto
     {
-        public MessageDto(string username, string body, bool mine)
+        public MessageDto(string username, string body, bool mine, DateTime dateSent)
         {
             Username = username;
             Body = body;
             Mine = mine;
+            DateSent = dateSent;
         }
 
         public string Username { get; set; }

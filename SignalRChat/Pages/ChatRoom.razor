@@ -25,6 +25,7 @@
             <div class="@item.CSS">
                     <div class="user">@item.Username</div>
                 <div class="msg">@item.Body</div>
+                <div>@item.DateSent</div>
             </div>
         }
         <hr />
@@ -61,10 +62,9 @@
             .WithUrl(navigationManager.ToAbsoluteUri("/chat"))
             .Build();
 
-        hubConnection.On<string, string>("ReceiveMessage", (name, message) =>
+        hubConnection.On<string, string, DateTime>("ReceiveMessage", (name, message, dateSent) =>
         {
-            //bool isMine = name.Equals(_user.Identity.Name, StringComparison.OrdinalIgnoreCase);
-            _messages.Add(new MessageDto(name, message, false));
+            _messages.Add(new MessageDto(name, message, false, dateSent));
             StateHasChanged();
 
 
@@ -74,27 +74,27 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        //var messagesFromDatabase = chatService.List(roomInput.ToLowerInvariant());
+        if (firstRender)
+        {
+            var messagesFromDatabase = chatService.GetUserMessages(_user.Identity.Name);
 
-        //foreach(var msg in messagesFromDatabase)
-        //{
-        //    messages.Add(new ChatMessageDTO()
-        //    {
-        //        Username = msg.Username,
-        //        DateSent = msg.DateSent,
-        //        CurrentUser = msg.Username == usernameInput,
-        //        Message = msg.Message.FillEmojiInText()
-        //    });
-        //}
-       await hubConnection.SendAsync("JoinToRoom", _user.Identity.Name);
+            foreach (var msg in messagesFromDatabase)
+            {
+                _messages.Add(new MessageDto(msg.From, msg.Body, msg.From.Equals(_user.Identity.Name, StringComparison.OrdinalIgnoreCase), msg.DateSent));
+
+            }
+            await hubConnection.SendAsync("JoinToMailbox", _user.Identity.Name);
+        }
 
     }
 
     private async Task SendMessage()
     {
-        await hubConnection.SendAsync("SendMessage", _user.Identity.Name,_userNameTo,_messageInput);
-        _messages.Add(new MessageDto(_user.Identity.Name, _messageInput, true));
+        await hubConnection.SendAsync("SendMessage", _user.Identity.Name,_userNameTo,_messageInput,DateTime.Now);
+        _messages.Add(new MessageDto(_user.Identity.Name, _messageInput, true, DateTime.Now));
+        chatService.AddMessage(new Message{Body = _messageInput,DateSent = DateTime.Now, From=_user.Identity.Name, To=_userNameTo});
         _messageInput = String.Empty;
+        _userNameTo = String.Empty;
     }
 
 }
